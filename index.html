@@ -310,13 +310,19 @@ async function loadExperiments() {
 loadExperiments();
 function renderTable(){
     document.getElementById('records').innerHTML =
-        allRecords.map(r => `
-            <tr>
-                <td>${r.city}</td>
-                <td>${r.cultivars.length}</td>
-                <td>${r.planting || '—'}</td>
-            </tr>
-        `).join('') ||
+        allRecords.map(r => {
+            const cultivarNames = r.cultivars
+                .map(c => c.name)
+                .filter(Boolean);
+
+            return `
+                <tr>
+                    <td>${r.city}</td>
+                    <td>${cultivarNames.length} (${cultivarNames.join('; ')})</td>
+                    <td>${r.planting || '—'}</td>
+                </tr>
+            `;
+        }).join('') ||
         '<tr><td colspan="3">Nenhum experimento cadastrado.</td></tr>';
 }
 
