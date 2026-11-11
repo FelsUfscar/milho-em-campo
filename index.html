@@ -153,8 +153,7 @@ table{border-collapse:collapse;width:100%;font-size:13px}th,td{text-align:left;b
   <section id="mapview" class="view active">
     <div class="stats">
       <div class="stat"><strong id="stat-exps">0</strong><span>Experimentos cadastrados</span></div>
-      <div class="stat"><strong id="stat-cult">0</strong><span>Total de cultivares avaliados</span></div>
-    </div>
+          </div>
     <div class="section-head"><div><h2>Distribuição geográfica</h2><p>Localização dos experimentos cadastrados no Brasil.</p></div><span class="tag">Mapa interativo</span></div>
     <div class="mapgrid">
       <div class="panel" style="padding:10px"><div id="map" class="mapbox"></div><div class="legend"><span><i class="dot" style="background:#237b4b"></i>Experimento cadastrado</span><span>© OpenStreetMap</span></div></div>
@@ -292,10 +291,8 @@ async function loadExperiments() {
         drawMap();
 
         // Atualizar os indicadores depois de carregar os dados
-        document.getElementById('stat-exps').textContent = allRecords.length;
-
-        document.getElementById('stat-cult').textContent =
-            allRecords.reduce((n, r) => n + r.cultivars.length, 0);
+        // Atualizar o indicador de experimentos cadastrados
+document.getElementById('stat-exps').textContent = allRecords.length;
 
         // Atualizar a tabela
         renderTable();
