@@ -50,13 +50,16 @@ table{border-collapse:collapse;width:100%;font-size:13px}th,td{text-align:left;b
   <div class="hero"><p style="font-size:clamp(16px,2vw,19px);font-weight:550">Registro e acompanhamento de experimentos comparativos de cultivares de milho em diferentes regiões do Brasil.</p></div>
 </header>
 <main>
-  <nav class="nav">
+  
+<nav class="nav">
     <button class="active" data-view="mapview">Página inicial</button>
     <button data-view="listview">Registros locais</button>
     <button data-view="newview">Cadastrar experimento</button>
-     <button data-view="myexperimentsview">Meus experimentos</button>
+    <button data-view="myexperimentsview">Meus experimentos</button>
     <button data-view="authview">Minha conta</button>
+    <button id="admin-nav-button" data-view="adminview" style="display: none;">Administração</button>
 </nav>
+
 
 <section id="authview" class="view">
 
@@ -151,6 +154,62 @@ table{border-collapse:collapse;width:100%;font-size:13px}th,td{text-align:left;b
 
     
 </section>
+
+<!-- ÁREA ADMINISTRATIVA -->
+<section id="adminview" class="view">
+
+    <div class="section-head">
+        <div>
+            <h2>Área administrativa</h2>
+            <p>Gerenciamento de usuários e experimentos do Milho em Campo.</p>
+        </div>
+    </div>
+
+    <div class="panel" id="admin-users-panel"></div>
+        <h3>Gerenciamento de usuários</h3>
+        <p class="muted">
+            Consulte os usuários cadastrados e gerencie seus níveis de acesso.
+        </p>
+        <div id="admin-users-message" class="muted">
+            A lista de usuários será carregada aqui.
+        </div>
+    </div>
+    <div class="panel" id="researcher-user-count-panel" style="display: none;">
+    <h3>Usuários cadastrados</h3>
+    <p class="muted">
+        Número total de usuários registrados na plataforma.
+    </p>
+    <div style="font-size: 32px; font-weight: bold; color: var(--primary);">
+        <span id="researcher-user-count">0</span>
+    </div>
+</div>
+
+    <div class="panel">
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 15px; flex-wrap: wrap;">
+
+    <h3 style="margin: 0;">Gerenciamento de experimentos</h3>
+
+    <button
+        id="admin-export-button"
+        type="button"
+        class="btn-secondary">
+        <span>↓</span> Exportar dados (.CSV)
+    </button>
+
+</div>
+
+<p class="muted">
+    Consulte os experimentos cadastrados na plataforma.
+</p>
+        <div id="admin-experiments-message" class="muted">
+            A lista de experimentos será carregada aqui.
+        </div>
+        <div id="admin-experiment-details" class="panel" style="display: none;">
+       </div>
+    </div>
+
+</section>
+
   <section id="mapview" class="view active">
     <div class="stats">
       <div class="stat"><strong id="stat-exps">0</strong><span>Experimentos cadastrados</span></div>
@@ -165,11 +224,20 @@ table{border-collapse:collapse;width:100%;font-size:13px}th,td{text-align:left;b
     <form id="experiment-form" class="panel">
       <h3>1. Identificação e localização</h3>
       <div class="formgrid">
-        <div class="field"><label for="farmer">Nome do agricultor (não publicar no mapa)</label><input id="farmer" placeholder="Nome do participante"></div>
+       <div class="field" style="grid-column: 1 / -1;">
+  <label for="farmer">Nome do agricultor (não publicar no mapa)</label>
+  <input id="farmer" placeholder="Nome do participante">
+</div>
         <div class="field"><label for="municipality">Município *</label><input id="municipality" required placeholder="Município"></div>
         <div class="field"><label for="state">Estado *</label><select id="state" required><option value="">Selecione</option><option>AC</option><option>AL</option><option>AP</option><option>AM</option><option>BA</option><option>CE</option><option>DF</option><option>ES</option><option>GO</option><option>MA</option><option>MT</option><option>MS</option><option>MG</option><option>PA</option><option>PB</option><option>PR</option><option>PE</option><option>PI</option><option>RJ</option><option>RN</option><option>RS</option><option>RO</option><option>RR</option><option>SC</option><option>SP</option><option>SE</option><option>TO</option></select></div>
         <div class="field"><label for="lat">Latitude *</label><input id="lat" required type="number" step="any" placeholder="-17.79"></div>
         <div class="field"><label for="lon">Longitude *</label><input id="lon" required type="number" step="any" placeholder="-50.92"></div>
+        <div class="field" style="grid-column: 1 / -1;">
+  <button type="button" id="get-location" class="btn">
+    📍 Obter minha localização automaticamente
+  </button>
+  <small id="location-message" style="display:block; margin-top:6px;"></small>
+</div>
                
       </div>
       <hr style="border:0;border-top:1px solid var(--line);margin:22px 0">
@@ -418,7 +486,7 @@ document.getElementById('stat-exps').textContent = allRecords.length;
         renderTable();
 
         console.log('Experimentos carregados:', allRecords.length);
-
+        
     } catch (error) {
         console.error('Erro ao carregar experimentos:', error);
     }
@@ -570,6 +638,52 @@ document.querySelectorAll('.nav button').forEach(b=>b.addEventListener('click', 
         }
     }
 
+        // Verificar autorização para acessar a área administrativa
+if (b.dataset.view === 'adminview') {
+
+    const { data: { session } } =
+        await supabaseClient.auth.getSession();
+
+    if (!session) {
+        return;
+    }
+
+    const { data: perfil, error } = await supabaseClient
+        .from('perfis')
+        .select('tipo')
+        .eq('id', session.user.id)
+        .single();
+
+    if (error || !perfil) {
+        alert('Não foi possível identificar o tipo de usuário.');
+        return;
+    }
+
+    const usersPanel =
+        document.getElementById('admin-users-panel');
+
+    const countPanel =
+        document.getElementById('researcher-user-count-panel');
+
+    if (perfil.tipo === 'administrador') {
+
+        usersPanel.style.display = 'block';
+        countPanel.style.display = 'none';
+
+        loadAdminUsers();
+
+    } else if (perfil.tipo === 'pesquisador') {
+
+        usersPanel.style.display = 'none';
+        countPanel.style.display = 'block';
+
+        loadResearcherUserCount();
+
+    }
+
+    loadAdminExperiments();
+}
+
     // Navegação normal
     document.querySelectorAll('.nav button').forEach(x=>x.classList.remove('active'));
     b.classList.add('active');
@@ -582,6 +696,36 @@ document.querySelectorAll('.nav button').forEach(b=>b.addEventListener('click', 
     }
 if (b.dataset.view === 'myexperimentsview') {
     loadMyExperiments();
+}
+if (b.dataset.view === 'adminview') {
+
+    const { data: { session } } =
+        await supabaseClient.auth.getSession();
+
+    if (!session) {
+        return;
+    }
+
+    const { data: perfil, error } = await supabaseClient
+        .from('perfis')
+        .select('tipo')
+        .eq('id', session.user.id)
+        .single();
+
+    if (error || !perfil) {
+        alert('Não foi possível identificar o tipo de usuário.');
+        return;
+    }
+
+    if (perfil.tipo === 'administrador') {
+        loadAdminUsers();
+    }
+
+    if (perfil.tipo === 'pesquisador') {
+        loadResearcherUserCount();
+    }
+
+    loadAdminExperiments();
 }
 }));
 
@@ -1667,7 +1811,7 @@ document.getElementById('signup-form').addEventListener('submit', async (e) => {
                 nome_completo: nomeCompleto,
                 nome_usuario: nomeUsuario
             },
-            emailRedirectTo: 'https://felsufscar.github.io/Milho-em-campo/'
+            emailRedirectTo: 'https://felsufscar.github.io/milho-em-campo/'
         }
     });
 
@@ -1721,12 +1865,17 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
 const accountStatus = document.getElementById('account-status');
 const logoutButton = document.getElementById('logout-button');
 
-// Consultar o perfil do produtor no banco
+
+// Consultar o perfil e o nível de acesso do usuário
 async function updateAccount(user) {
+    const adminNavButton = document.getElementById('admin-nav-button');
 
     if (!user) {
         accountStatus.textContent = 'Você não está conectado. Faça login ou crie sua conta.';
         logoutButton.style.display = 'none';
+         if (adminNavButton) {
+            adminNavButton.style.display = 'none';
+        }
         return;
     }
 
@@ -1735,7 +1884,7 @@ async function updateAccount(user) {
 
     const { data: perfil, error } = await supabaseClient
         .from('perfis')
-        .select('nome_usuario, nome_completo')
+        .select('nome_usuario, nome_completo, tipo')
         .eq('id', user.id)
         .single();
 
@@ -1745,14 +1894,845 @@ async function updateAccount(user) {
         logoutButton.style.display = 'inline-block';
         return;
     }
-
-    accountStatus.textContent =
+if (adminNavButton) {
+    adminNavButton.style.display =
+        ['administrador', 'pesquisador'].includes(perfil.tipo)
+            ? 'inline-block'
+            : 'none';
+}    accountStatus.textContent =
         'Conectado como: ' + perfil.nome_usuario +
-        ' (' + perfil.nome_completo + ')';
+        ' (' + perfil.nome_completo + ')' +
+        ' | Tipo: ' + perfil.tipo;
 
     logoutButton.style.display = 'inline-block';
 }
 
+
+// Carregar usuários cadastrados na área administrativa
+
+
+async function loadAdminUsers() {
+
+    const message = document.getElementById('admin-users-message');
+
+    message.textContent = 'Carregando usuários cadastrados...';
+
+    const { data: usuarios, error } =
+        await supabaseClient.rpc('admin_listar_usuarios');
+
+    if (error) {
+        console.error('Erro ao carregar usuários:', error);
+        message.textContent = 'Erro ao carregar usuários: ' + error.message;
+        return;
+    }
+
+    if (!usuarios || usuarios.length === 0) {
+        message.textContent = 'Nenhum usuário cadastrado.';
+        return;
+    }
+
+    // Identificar administrador conectado
+    const { data: userData, error: userError } =
+        await supabaseClient.auth.getUser();
+
+    if (userError || !userData.user) {
+        message.textContent = 'Não foi possível identificar o administrador conectado.';
+        return;
+    }
+
+    const adminId = userData.user.id;
+
+    // Criar tabela
+    const tabela = document.createElement('table');
+    tabela.style.width = '100%';
+    tabela.style.borderCollapse = 'collapse';
+    tabela.style.marginTop = '15px';
+
+    const cabecalho = document.createElement('thead');
+
+    cabecalho.innerHTML = `
+        <tr>
+            <th>Nome completo</th>
+            <th>Nome de usuário</th>
+            <th>E-mail</th>
+            <th>Tipo de acesso</th>
+            <th>Data de cadastro</th>
+        </tr>
+    `;
+
+    tabela.appendChild(cabecalho);
+
+    const corpo = document.createElement('tbody');
+
+    usuarios.forEach(usuario => {
+
+        const linha = document.createElement('tr');
+
+        const dataCadastro = usuario.criado_em
+            ? new Date(usuario.criado_em).toLocaleDateString('pt-BR')
+            : 'Não informado';
+
+        const dados = [
+            usuario.nome_completo,
+            usuario.nome_usuario,
+            usuario.email
+        ];
+
+        dados.forEach(valor => {
+            const celula = document.createElement('td');
+            celula.textContent = valor || 'Não informado';
+            celula.style.padding = '10px';
+            celula.style.borderBottom = '1px solid #ddd';
+            linha.appendChild(celula);
+        });
+
+        // Campo de seleção do tipo de acesso
+        const celulaTipo = document.createElement('td');
+        celulaTipo.style.padding = '10px';
+        celulaTipo.style.borderBottom = '1px solid #ddd';
+
+        const seletor = document.createElement('select');
+
+        const tipos = [
+            { valor: 'produtor', texto: 'Produtor' },
+            { valor: 'pesquisador', texto: 'Pesquisador' },
+            { valor: 'administrador', texto: 'Administrador' }
+        ];
+
+        tipos.forEach(tipo => {
+            const opcao = document.createElement('option');
+            opcao.value = tipo.valor;
+            opcao.textContent = tipo.texto;
+            seletor.appendChild(opcao);
+        });
+
+        seletor.value = usuario.tipo;
+
+        // Impedir alteração do próprio nível de acesso
+        if (usuario.id === adminId) {
+            seletor.disabled = true;
+            seletor.title = 'Não é permitido alterar o próprio nível de acesso.';
+        }
+
+        // Salvar alteração no Supabase
+        seletor.addEventListener('change', async () => {
+
+            const novoTipo = seletor.value;
+            const tipoAnterior = usuario.tipo;
+
+            seletor.disabled = true;
+            message.textContent = 'Salvando alteração de acesso...';
+
+            const { error: updateError } =
+                await supabaseClient.rpc('admin_alterar_tipo_usuario', {
+                    p_usuario_id: usuario.id,
+                    p_novo_tipo: novoTipo
+                });
+
+            if (updateError) {
+
+                console.error('Erro ao alterar tipo de usuário:', updateError);
+
+                seletor.value = tipoAnterior;
+                message.textContent =
+                    'Erro ao alterar acesso: ' + updateError.message;
+
+                seletor.disabled = false;
+                return;
+            }
+
+            usuario.tipo = novoTipo;
+
+            message.textContent =
+                'Nível de acesso atualizado com sucesso.';
+
+            seletor.disabled = false;
+
+        });
+
+        celulaTipo.appendChild(seletor);
+        linha.appendChild(celulaTipo);
+
+        // Data de cadastro
+        const celulaData = document.createElement('td');
+        celulaData.textContent = dataCadastro;
+        celulaData.style.padding = '10px';
+        celulaData.style.borderBottom = '1px solid #ddd';
+
+        linha.appendChild(celulaData);
+
+        corpo.appendChild(linha);
+
+    });
+
+    tabela.appendChild(corpo);
+
+    message.textContent = '';
+    message.appendChild(tabela);
+
+}
+
+// Consultar total de usuários cadastrados
+async function loadResearcherUserCount() {
+
+    const { count, error } = await supabaseClient
+        .from('perfis')
+        .select('id', { count: 'exact', head: true });
+
+    if (error) {
+        console.error('Erro ao consultar total de usuários:', error);
+        return;
+    }
+
+    const countElement =
+        document.getElementById('researcher-user-count');
+
+    if (countElement) {
+        countElement.textContent = count;
+    }
+}
+
+// Carregar experimentos na área administrativa
+
+async function loadAdminExperiments() {
+
+    const message = document.getElementById('admin-experiments-message');
+
+    message.textContent = 'Carregando experimentos cadastrados...';
+
+    const { data: experimentos, error } =
+        await supabaseClient.rpc('admin_listar_experimentos');
+
+    if (error) {
+        console.error('Erro ao carregar experimentos:', error);
+        message.textContent =
+            'Erro ao carregar experimentos: ' + error.message;
+        return;
+    }
+
+    if (!experimentos || experimentos.length === 0) {
+        message.textContent = 'Nenhum experimento cadastrado.';
+        return;
+    }
+
+        // Informar quantidade de experimentos
+    const titulo = document.createElement('p');
+    titulo.textContent =
+        'Total de experimentos cadastrados: ' + experimentos.length;
+
+    // Opção para selecionar todos os experimentos
+    const selecionarTodosDiv = document.createElement('div');
+    selecionarTodosDiv.style.margin = '15px 0';
+
+    const selecionarTodos = document.createElement('input');
+    selecionarTodos.type = 'checkbox';
+    selecionarTodos.id = 'admin-select-all';
+    selecionarTodos.style.width = 'auto';
+    selecionarTodos.style.margin = '0';
+    selecionarTodos.style.flex = '0 0 auto';
+
+    const selecionarTodosLabel = document.createElement('label');
+    selecionarTodosLabel.htmlFor = 'admin-select-all';
+    selecionarTodosLabel.textContent = ' Selecionar todos os experimentos';
+
+    selecionarTodosDiv.appendChild(selecionarTodos);
+    selecionarTodosDiv.appendChild(selecionarTodosLabel);
+
+    // Criar tabela
+    const tabela = document.createElement('table');
+    tabela.style.width = '100%';
+    tabela.style.borderCollapse = 'collapse';
+    tabela.style.marginTop = '15px';
+
+    tabela.innerHTML = `
+    <thead>
+        <tr>
+            <th>Selecionar</th>
+            <th>Identificação</th>
+            <th>Produtor responsável</th>
+                <th>Agricultor</th>
+                <th>Município/UF</th>
+                <th>Data de plantio</th>
+                <th>Data de cadastro</th>
+                <th>Ações</th>
+            </tr>
+        </thead>
+    `;
+
+    const corpo = document.createElement('tbody');
+
+    experimentos.forEach(experimento => {
+
+    const linha = document.createElement('tr');
+
+    // Caixa de seleção do experimento
+    const celulaSelecao = document.createElement('td');
+
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.className = 'admin-experiment-checkbox';
+    checkbox.value = experimento.id;
+
+    celulaSelecao.appendChild(checkbox);
+    linha.appendChild(celulaSelecao);
+
+    const identificacao =
+        'MC-' + experimento.id.substring(0, 8);
+
+        const municipio =
+            [experimento.cidade, experimento.estado]
+                .filter(Boolean)
+                .join('/');
+
+        const dataPlantio = experimento.data_plantio
+            ? new Date(experimento.data_plantio + 'T00:00:00')
+                .toLocaleDateString('pt-BR')
+            : 'Não informado';
+
+        const dataCadastro = experimento.criado_em
+            ? new Date(experimento.criado_em)
+                .toLocaleDateString('pt-BR')
+            : 'Não informado';
+
+        const dados = [
+            identificacao,
+            experimento.nome_completo || experimento.nome_usuario || 'Não informado',
+            experimento.nome_agricultor || 'Não informado',
+            municipio || 'Não informado',
+            dataPlantio,
+            dataCadastro
+        ];
+
+        dados.forEach(valor => {
+
+    const celula = document.createElement('td');
+    celula.textContent = valor;
+    celula.style.padding = '10px';
+    celula.style.borderBottom = '1px solid #ddd';
+
+    linha.appendChild(celula);
+
+});
+
+// Coluna de ações
+const celulaAcoes = document.createElement('td');
+celulaAcoes.style.padding = '10px';
+celulaAcoes.style.borderBottom = '1px solid #ddd';
+
+// Botão Visualizar
+const visualizarButton = document.createElement('button');
+
+visualizarButton.textContent = 'Visualizar';
+visualizarButton.type = 'button';
+visualizarButton.className = 'btn-secondary';
+visualizarButton.dataset.id = experimento.id;
+
+visualizarButton.addEventListener('click', () => {
+    loadAdminExperimentDetails(experimento.id);
+});
+
+celulaAcoes.appendChild(visualizarButton);
+linha.appendChild(celulaAcoes);
+
+        corpo.appendChild(linha);
+
+    });
+// Selecionar ou desmarcar todos os experimentos
+selecionarTodos.addEventListener('change', () => {
+
+    const checkboxes = document.querySelectorAll(
+        '.admin-experiment-checkbox'
+    );
+
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = selecionarTodos.checked;
+    });
+
+});
+
+// Atualizar "Selecionar todos" quando houver alteração individual
+document.querySelectorAll('.admin-experiment-checkbox')
+    .forEach(checkbox => {
+
+        checkbox.addEventListener('change', () => {
+
+            const checkboxes = document.querySelectorAll(
+                '.admin-experiment-checkbox'
+            );
+
+            selecionarTodos.checked =
+                checkboxes.length > 0 &&
+                Array.from(checkboxes).every(item => item.checked);
+
+        });
+
+    });
+    
+    tabela.appendChild(corpo);
+
+    message.textContent = '';
+    message.appendChild(titulo);
+    message.appendChild(selecionarTodosDiv);
+    message.appendChild(tabela);
+
+}
+// Carregar detalhes de um experimento na área administrativa
+
+// Exportar os experimentos selecionados para CSV
+
+async function exportSelectedExperimentsCSV() {
+
+    // Identificar os experimentos selecionados
+    const selectedCheckboxes = document.querySelectorAll(
+        '.admin-experiment-checkbox:checked'
+    );
+
+    const selectedIds = Array.from(selectedCheckboxes)
+        .map(checkbox => checkbox.value);
+
+    if (selectedIds.length === 0) {
+        alert('Selecione pelo menos um experimento para exportar.');
+        return;
+    }
+
+    try {
+
+        // Buscar os dados dos experimentos
+        const { data: experimentos, error: experimentosError } =
+            await supabaseClient
+                .from('experimentos')
+                .select(`
+                    id,
+                    nome_agricultor,
+                    cidade,
+                    estado,
+                    data_plantio
+                `)
+                .in('id', selectedIds);
+
+        if (experimentosError) {
+            throw experimentosError;
+        }
+
+        // Buscar as cultivares dos experimentos selecionados
+        const { data: cultivares, error: cultivaresError } =
+            await supabaseClient
+                .from('cultivares')
+                .select(`
+                    id,
+                    experimento_id,
+                    nome_cultivar,
+                    data_colheita
+                `)
+                .in('experimento_id', selectedIds);
+
+        if (cultivaresError) {
+            throw cultivaresError;
+        }
+
+        // Buscar as avaliações das cultivares
+        let avaliacoes = [];
+
+        if (cultivares && cultivares.length > 0) {
+
+            const cultivarIds = cultivares.map(cultivar => cultivar.id);
+
+            const { data, error } = await supabaseClient
+                .from('avaliacoes')
+                .select(`
+                    cultivar_id,
+                    comprimento_espiga_cm,
+                    peso_espiga_g,
+                    diametro_espiga_cm,
+                    diametro_colmo_cm
+                `)
+                .in('cultivar_id', cultivarIds);
+
+            if (error) {
+                throw error;
+            }
+
+            avaliacoes = data || [];
+        }
+
+        // Formatar datas
+        const formatDate = value => {
+
+            if (!value) return '';
+
+            return new Date(value + 'T00:00:00')
+                .toLocaleDateString('pt-BR');
+        };
+
+        // Montar as linhas do CSV
+        const linhas = [];
+
+        experimentos.forEach(experimento => {
+
+            const cultivaresDoExperimento = cultivares.filter(
+                cultivar => cultivar.experimento_id === experimento.id
+            );
+
+            // Experimento sem cultivares
+            if (cultivaresDoExperimento.length === 0) {
+
+                linhas.push([
+                    experimento.nome_agricultor || '',
+                    [experimento.cidade, experimento.estado]
+                        .filter(Boolean).join('/'),
+                    formatDate(experimento.data_plantio),
+                    '',
+                    '',
+                    '',
+                    '',
+                    '',
+                    ''
+                ]);
+
+                return;
+            }
+
+            cultivaresDoExperimento.forEach(cultivar => {
+
+                const avaliacoesDaCultivar = avaliacoes.filter(
+                    avaliacao => avaliacao.cultivar_id === cultivar.id
+                );
+
+                // Cultivar sem avaliações
+                if (avaliacoesDaCultivar.length === 0) {
+
+                    linhas.push([
+                        experimento.nome_agricultor || '',
+                        [experimento.cidade, experimento.estado]
+                            .filter(Boolean).join('/'),
+                        formatDate(experimento.data_plantio),
+                        formatDate(cultivar.data_colheita),
+                        cultivar.nome_cultivar || '',
+                        '',
+                        '',
+                        '',
+                        ''
+                    ]);
+
+                    return;
+                }
+
+                // Uma linha para cada avaliação/espiga
+                avaliacoesDaCultivar.forEach(avaliacao => {
+
+                    linhas.push([
+                        experimento.nome_agricultor || '',
+                        [experimento.cidade, experimento.estado]
+                            .filter(Boolean).join('/'),
+                        formatDate(experimento.data_plantio),
+                        formatDate(cultivar.data_colheita),
+                        cultivar.nome_cultivar || '',
+                        avaliacao.comprimento_espiga_cm ?? '',
+                        avaliacao.peso_espiga_g ?? '',
+                        avaliacao.diametro_espiga_cm ?? '',
+                        avaliacao.diametro_colmo_cm ?? ''
+                    ]);
+
+                });
+
+            });
+
+        });
+
+        // Cabeçalho do arquivo
+        const cabecalho = [
+            'Agricultor',
+            'Localização',
+            'Data do plantio',
+            'Data da colheita',
+            'Cultivar',
+            'Tamanho da espiga (cm)',
+            'Peso da espiga (g)',
+            'Diâmetro da espiga (cm)',
+            'Diâmetro do colmo (cm)'
+        ];
+
+        // Escapar valores para o formato CSV
+        const escaparCSV = valor =>
+            '"' + String(valor ?? '').replace(/"/g, '""') + '"';
+
+        const conteudoCSV = [
+            cabecalho,
+            ...linhas
+        ].map(linha =>
+            linha.map(escaparCSV).join(';')
+        ).join('\r\n');
+
+        // Gerar arquivo com suporte a acentos
+        const blob = new Blob(
+            ['\uFEFF' + conteudoCSV],
+            { type: 'text/csv;charset=utf-8;' }
+        );
+
+        const url = URL.createObjectURL(blob);
+
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'milho_em_campo_dados.csv';
+
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        URL.revokeObjectURL(url);
+
+    } catch (error) {
+
+        console.error('Erro ao exportar dados:', error);
+
+        alert(
+            'Não foi possível exportar os dados: ' + error.message
+        );
+
+    }
+
+}
+// Conectar o botão à função de exportação
+const exportButton = document.getElementById('admin-export-button');
+
+if (exportButton) {
+    exportButton.addEventListener(
+        'click',
+        exportSelectedExperimentsCSV
+    );
+}
+
+async function loadAdminExperimentDetails(experimentId) {
+
+    const details = document.getElementById('admin-experiment-details');
+
+    details.style.display = 'block';
+    details.textContent = 'Carregando detalhes do experimento...';
+
+    const { data: experimento, error } = await supabaseClient
+        .from('experimentos')
+        .select(`
+            id,
+            nome_agricultor,
+            cidade,
+            estado,
+            latitude,
+            longitude,
+            data_plantio,
+            criado_em,
+            produtor_id
+        `)
+        .eq('id', experimentId)
+        .single();
+
+    if (error) {
+        console.error('Erro ao carregar experimento:', error);
+        details.textContent = 'Erro ao carregar experimento: ' + error.message;
+        return;
+    }
+
+    details.textContent = '';
+
+    const titulo = document.createElement('h3');
+    titulo.textContent = 'Detalhes do experimento';
+    details.appendChild(titulo);
+
+    const identificacao = document.createElement('p');
+    identificacao.textContent =
+        'Identificação: MC-' + experimento.id.substring(0, 8);
+    details.appendChild(identificacao);
+
+    const agricultor = document.createElement('p');
+    agricultor.textContent =
+        'Agricultor: ' + (experimento.nome_agricultor || 'Não informado');
+    details.appendChild(agricultor);
+
+    const municipio = document.createElement('p');
+    municipio.textContent =
+        'Município/UF: ' +
+        [experimento.cidade, experimento.estado].filter(Boolean).join('/') ;
+    details.appendChild(municipio);
+
+    const plantio = document.createElement('p');
+    plantio.textContent =
+        'Data de plantio: ' +
+        (experimento.data_plantio
+            ? new Date(experimento.data_plantio + 'T00:00:00').toLocaleDateString('pt-BR')
+            : 'Não informado');
+    details.appendChild(plantio);
+
+// Buscar cultivares do experimento
+
+const { data: cultivares, error: cultivaresError } =
+    await supabaseClient
+        .from('cultivares')
+        .select('id, nome_cultivar')
+        .eq('experimento_id', experimentId);
+
+if (cultivaresError) {
+
+    const erroCultivares = document.createElement('p');
+    erroCultivares.textContent =
+        'Erro ao carregar cultivares: ' + cultivaresError.message;
+    details.appendChild(erroCultivares);
+
+}
+// Buscar avaliações das cultivares
+
+const tituloAvaliacoes = document.createElement('h4');
+tituloAvaliacoes.textContent = 'Avaliações das cultivares';
+details.appendChild(tituloAvaliacoes);
+
+if (cultivares && cultivares.length > 0) {
+
+    const cultivarIds = cultivares.map(cultivar => cultivar.id);
+
+    const { data: avaliacoes, error: avaliacoesError } =
+        await supabaseClient
+            .from('avaliacoes')
+            .select(`
+                id,
+                cultivar_id,
+                peso_espiga_g,
+                comprimento_espiga_cm,
+                diametro_espiga_cm,
+                diametro_colmo_cm,
+                observacoes
+            `)
+            .in('cultivar_id', cultivarIds);
+
+    if (avaliacoesError) {
+
+        const erro = document.createElement('p');
+        erro.textContent =
+            'Erro ao carregar avaliações: ' + avaliacoesError.message;
+        details.appendChild(erro);
+
+    } else if (!avaliacoes || avaliacoes.length === 0) {
+
+        const semAvaliacoes = document.createElement('p');
+        semAvaliacoes.textContent = 'Nenhuma avaliação cadastrada.';
+        details.appendChild(semAvaliacoes);
+
+    } else {
+
+        avaliacoes.forEach(async avaliacao => {
+
+            const cultivar = cultivares.find(
+                item => item.id === avaliacao.cultivar_id
+            );
+
+            const bloco = document.createElement('div');
+
+            const nome = document.createElement('p');
+            nome.textContent =
+                'Cultivar: ' + (cultivar?.nome_cultivar || 'Não informada');
+            bloco.appendChild(nome);
+
+            const peso = document.createElement('p');
+            peso.textContent =
+                'Peso da espiga: ' +
+                (avaliacao.peso_espiga_g ?? 'Não informado') + ' g';
+            bloco.appendChild(peso);
+
+            const comprimento = document.createElement('p');
+            comprimento.textContent =
+                'Comprimento da espiga: ' +
+                (avaliacao.comprimento_espiga_cm ?? 'Não informado') + ' cm';
+            bloco.appendChild(comprimento);
+
+            const diametro = document.createElement('p');
+            diametro.textContent =
+                'Diâmetro da espiga: ' +
+                (avaliacao.diametro_espiga_cm ?? 'Não informado') + ' cm';
+            bloco.appendChild(diametro);
+
+            const diametroColmo = document.createElement('p');
+            diametroColmo.textContent =
+                'Diâmetro do colmo: ' +
+                (avaliacao.diametro_colmo_cm ?? 'Não informado') + ' cm';
+            bloco.appendChild(diametroColmo);
+
+            const observacoes = document.createElement('p');
+            observacoes.textContent =
+                'Observações: ' +
+                (avaliacao.observacoes || 'Nenhuma');
+            bloco.appendChild(observacoes);
+
+            bloco.style.marginBottom = '12px';
+            bloco.style.padding = '10px';
+            bloco.style.borderBottom = '1px solid #ddd';
+
+            details.appendChild(bloco);
+// Buscar fotografias da avaliação
+
+const { data: fotografias, error: fotografiasError } =
+    await supabaseClient
+        .from('fotografias')
+        .select('caminho_arquivo, nome_arquivo')
+        .eq('avaliacao_id', avaliacao.id);
+
+if (fotografiasError) {
+
+    console.error('Erro ao buscar fotografias:', fotografiasError);
+
+    const erroFoto = document.createElement('p');
+    erroFoto.textContent = 'Erro ao carregar fotografias.';
+    bloco.appendChild(erroFoto);
+
+} else if (fotografias && fotografias.length > 0) {
+
+    const tituloFotos = document.createElement('p');
+    tituloFotos.textContent = 'Fotografias:';
+    tituloFotos.style.fontWeight = 'bold';
+    bloco.appendChild(tituloFotos);
+
+    for (const fotografia of fotografias) {
+
+        const { data: fotoUrl, error: fotoUrlError } =
+            await supabaseClient
+                .storage
+                .from('fotos-experimentos')
+                .createSignedUrl(fotografia.caminho_arquivo, 3600);
+
+        if (fotoUrlError) {
+            console.error('Erro ao gerar link da fotografia:', fotoUrlError);
+            continue;
+        }
+
+        const imagem = document.createElement('img');
+        imagem.src = fotoUrl.signedUrl;
+        imagem.alt = fotografia.nome_arquivo || 'Fotografia da avaliação';
+        imagem.style.width = '100%';
+        imagem.style.maxWidth = '350px';
+        imagem.style.height = 'auto';
+        imagem.style.display = 'block';
+        imagem.style.marginTop = '10px';
+        imagem.style.borderRadius = '8px';
+
+        bloco.appendChild(imagem);
+    }
+}
+        });
+    }
+}
+// Botão para fechar os detalhes
+
+const fecharButton = document.createElement('button');
+
+fecharButton.textContent = 'Fechar detalhes';
+fecharButton.type = 'button';
+fecharButton.className = 'btn-secondary';
+
+fecharButton.style.marginTop = '20px';
+
+fecharButton.addEventListener('click', () => {
+    details.style.display = 'none';
+    details.textContent = '';
+});
+
+details.appendChild(fecharButton);
+}
 
 // Reconhecer login, logout e sessão já existente
 supabaseClient.auth.onAuthStateChange((event, session) => {
@@ -1782,6 +2762,67 @@ logoutButton.addEventListener('click', async () => {
     if (error) {
         showAuthMessage('Erro ao sair da conta: ' + error.message, true);
     }
+
+});
+
+
+// OBTER LOCALIZAÇÃO AUTOMATICAMENTE
+const getLocationButton = document.getElementById('get-location');
+const locationMessage = document.getElementById('location-message');
+
+getLocationButton.addEventListener('click', () => {
+
+    if (!navigator.geolocation) {
+        locationMessage.textContent =
+            'Seu navegador não oferece suporte à geolocalização.';
+        return;
+    }
+
+    getLocationButton.disabled = true;
+    locationMessage.textContent = 'Obtendo sua localização...';
+
+    navigator.geolocation.getCurrentPosition(
+
+        (position) => {
+
+            const latitude = position.coords.latitude;
+            const longitude = position.coords.longitude;
+
+            document.getElementById('lat').value =
+                latitude.toFixed(6);
+
+            document.getElementById('lon').value =
+                longitude.toFixed(6);
+
+            locationMessage.textContent =
+                'Localização obtida com sucesso!';
+
+            getLocationButton.disabled = false;
+        },
+
+        (error) => {
+
+            if (error.code === 1) {
+                locationMessage.textContent =
+                    'Permissão de localização negada. Autorize o acesso no navegador.';
+            } else if (error.code === 2) {
+                locationMessage.textContent =
+                    'Não foi possível identificar sua localização.';
+            } else if (error.code === 3) {
+                locationMessage.textContent =
+                    'Tempo esgotado ao tentar obter a localização. Tente novamente.';
+            }
+
+            getLocationButton.disabled = false;
+        },
+
+        {
+            enableHighAccuracy: true,
+            timeout: 20000,
+            maximumAge: 0
+        }
+
+    );
 
 });
 
