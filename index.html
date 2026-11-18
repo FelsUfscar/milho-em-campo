@@ -2092,13 +2092,125 @@ async function loadResearcherUserCount() {
     }
 }
 
+
+// Excluir experimento e seus arquivos de fotografia (somente administrador)
+
+async function adminExcluirExperimento(experimento) {
+
+    const identificacao =
+        'MC-' + experimento.id.substring(0, 8);
+
+    const confirmacao = confirm(
+        'ATENÇÃO: exclusão definitiva!\n\n' +
+        'Experimento: ' + identificacao + '\n' +
+        'Agricultor: ' +
+        (experimento.nome_agricultor || 'Não informado') +
+        '\n\n' +
+        'As fotografias, avaliações e cultivares também serão excluídas.\n\n' +
+        'Deseja realmente continuar?'
+    );
+
+    if (!confirmacao) {
+        return;
+    }
+
+    try {
+
+        // 1. Buscar os caminhos das fotografias
+        const { data: fotografias, error: erroFotos } =
+            await supabaseClient.rpc(
+                'admin_listar_caminhos_fotografias',
+                { p_experimento_id: experimento.id }
+            );
+
+        if (erroFotos) {
+            throw erroFotos;
+        }
+
+        // 2. Remover os arquivos do Storage
+        const caminhos = (fotografias || [])
+            .map(foto => foto.caminho_arquivo);
+
+        if (caminhos.length > 0) {
+
+            const { error: erroStorage } =
+                await supabaseClient.storage
+                    .from('fotos-experimentos')
+                    .remove(caminhos);
+
+            if (erroStorage) {
+                throw erroStorage;
+            }
+        }
+
+        // 3. Excluir o experimento no banco de dados
+        const { error: erroExclusao } =
+            await supabaseClient.rpc(
+                'admin_excluir_experimento',
+                { p_experimento_id: experimento.id }
+            );
+
+        if (erroExclusao) {
+            throw erroExclusao;
+        }
+
+        alert(
+            'Experimento ' + identificacao +
+            ' excluído com sucesso!'
+        );
+
+        // 4. Atualizar a lista administrativa
+        await loadAdminExperiments();
+
+        // Fechar detalhes, caso estejam abertos
+        const detalhes =
+            document.getElementById('admin-experiment-details');
+
+        if (detalhes) {
+            detalhes.style.display = 'none';
+            detalhes.innerHTML = '';
+        }
+
+    } catch (erro) {
+
+        console.error('Erro ao excluir experimento:', erro);
+
+        alert(
+            'Não foi possível concluir a exclusão.\n\n' +
+            'Detalhes: ' + erro.message
+        );
+    }
+}
+
 // Carregar experimentos na área administrativa
 
 async function loadAdminExperiments() {
 
-    const message = document.getElementById('admin-experiments-message');
+const message = document.getElementById('admin-experiments-message');
 
-    message.textContent = 'Carregando experimentos cadastrados...';
+// Identificar o tipo de usuário conectado
+const { data: userData, error: userError } =
+    await supabaseClient.auth.getUser();
+
+if (userError || !userData.user) {
+    message.textContent = 'Não foi possível identificar o usuário conectado.';
+    return;
+}
+
+const { data: perfil, error: perfilError } = await supabaseClient
+    .from('perfis')
+    .select('tipo')
+    .eq('id', userData.user.id)
+    .single();
+
+if (perfilError) {
+    message.textContent = 'Não foi possível identificar o tipo de acesso.';
+    return;
+}
+
+const usuarioEhAdministrador = perfil.tipo === 'administrador';
+
+message.textContent = 'Carregando experimentos cadastrados...';
 
     const { data: experimentos, error } =
         await supabaseClient.rpc('admin_listar_experimentos');
@@ -2232,6 +2344,24 @@ visualizarButton.addEventListener('click', () => {
 });
 
 celulaAcoes.appendChild(visualizarButton);
+
+// Botão Excluir — somente para administradores
+if (usuarioEhAdministrador) {
+
+    const excluirButton = document.createElement('button');
+
+    excluirButton.textContent = 'Excluir';
+    excluirButton.type = 'button';
+    excluirButton.className = 'btn-secondary';
+    excluirButton.style.marginLeft = '8px';
+
+    excluirButton.addEventListener('click', () => {
+        adminExcluirExperimento(experimento);
+    });
+
+    celulaAcoes.appendChild(excluirButton);
+}
+
 linha.appendChild(celulaAcoes);
 
         corpo.appendChild(linha);
