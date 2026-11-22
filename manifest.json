@@ -1,4 +1,5 @@
 
+
 {
   "id": "./",
   "name": "Milho em Campo",
@@ -19,7 +20,7 @@
       "purpose": "any"
     },
     {
-      "src": "./ícon-512.png",
+      "src": "./icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
